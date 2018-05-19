@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://web.archive.org/web/20170407022420cs_/https://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css">
+    <script src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
+    <script src="https://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+    <!--<script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=true"></script> -->
+    <script type="text/javascript" src="http://maps.google.com/maps/api/js?v=3.exp&sensor=true "></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyD6WZaKd3LyB55lHNk3aRyGs7_iDrqO-i4&libraries=places"></script>
+
+    <script>
+
+
+		/* Variable to store the page which display the activity map*/
+        var x = document.getElementById("activityPage");
+		
+		/* Variable to store a map */
+        var map;
+
+		/* Variable to store nearbySearch service */
+        var service;
+		
+		/* Variable to display information of each location on the map */
+        var infowindow;
+		
+		/* Variable to store a activity page chosen by a user */
+        var pageChosen;
+		
+		/* Variable to store user's current location */
+        var currentPosition;
+		
+		/* Array variable to store location results returned from a nearbySearch */
+        var arenas = [];
+		
+		/* Array variable to store detail information for each location returned from details search */
+        var arenasDetails = [];
+		
+		/* Array variable to store distance between each location and user location */
+        var dist = ["abc", "def"];
+		
+		/* Array variable to store travel time by driving between each location and user location */
+        var dur = ["min", "minutes"];
+		
+		/* Variable to store a string of activity chosen by the user */
+        var activityKeyWord;
+		
+		/* Flag Variable to set/reset chosen page of each activity */
+		var chosenPageReloaded = false;
+		
+		/* Variable to to get index for url */
+		var urlIndex;
+		
+		/* Variable to save ' ', 'open' or 'closed' string depending on open_now status **/
+		var openOrClosed;
+		
+		/* Variable to store openHours status of the locations */
+		var openHours = [];
+		
+		/* Variable to store weekday_text from openingHours returned from place details search of a location */
+		var weekdayText =[];
+		
+		/* Variable to store empty string if weekday_text is undefined */
+        var emptyHours;
+		
+        /* Variable to store daily opening hours (Monday through Sunday)  of the week */
+        var openingHoursString = '';
+		
+		/* Array variable to store '', 'open', or 'closed' status for all the locations returned from nearbySearch result */
+		var openOrClosedArray = [];
+		
+		/* Bollean variable to determine if the pageChosen should be reset */
+		var pageChosenAlready = true;
+		
+		/* Variable to store chosen tap from the list */
+		var tabChosen;
+		
+		/* Variable to save photos */
+		var photosArray = [];
+		
+		/* Flag Variables for each activity to request Place Details request. These variable are set to 'false' after a request is done, and reset to 'true' after map for each activity is
+     	 * reloaded.   
+		 */
+		var firstPlaceDetailsSearchBikingCycling = true;
+		var firstPlaceDetailsSearchCamping = true;
+		var firstPlaceDetailsSearchCanoeingKayaking = true;
+		var firstPlaceDetailsSearchFishing = true;
+		var firstPlaceDetailsSearchJoggingRunning = true;
+		var firstPlaceDetailsSearchHikingSightSeeing = true;
+		var firstPlaceDetailsSearchSkating = true;
+		var firstPlaceDetailsSearchSnowboardingSkiing = true;
+		var firstPlaceDetailsSearchSwimming = true;
+		
+		
+		/* Function to programmatically change from one page to 'mainPage' */
+		function goToMainPage(obj) {
+		/* Change to activityListPage with a transition "slideup" */
+            $.mobile.changePage("#mainPage" , {
+			transition: "slideup"
+			});
+			
+			/* Reset flag so that new or same page will be chosen and variable 'pageChosen' will be updated again inside function 'goToActivity' */ 
+			pageChosenAlready = true;
+		}
+
+		/* Function to computer height of the div emelent 'content' in 'activityPage' (Map page) */
+        function getRealContentHeight() {
+            var header = $.mobile.activePage.find("div[data-role='header']:visible");
+            var footer = $.mobile.activePage.find("div[data-role='footer']:visible");
+            var content = $.mobile.activePage.find("div[data-role='content']:visible:visible");
+            var viewport_height = $(window).height();
+
+            var content_height = viewport_height - header.outerHeight() - footer.outerHeight();
+            if ((content.outerHeight() - header.outerHeight() - footer.outerHeight()) <= viewport_height) {
+                content_height -= (content.outerHeight() - content.height());
+            }
+            return content_height;
+        }
+
+		/* Function to display error when request on unsuccessful Geolocation request */
+        function showError(error) {
+            switch (error.code) {
+                case error.PERMISSION_DENIED:
+                    x.innerHTML = "User denied the request for Geolocation."
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    x.innerHTML = "Location information is unavailable."
+                    break;
+                case error.TIMEOUT:
+                    x.innerHTML = "The request to get user location timed out."
+                    break;
+                case error.UNKNOWN_ERROR:
+                    x.innerHTML = "An unknown error occurred."
+                    break;
+            }
+        }
+		/* Function to to fetch Geolocation using navigator. It invokes getCurrentPosition with two arguments. First argument is a function to show the position of the user and second 
+		 * argument is for error handling.
+		 */
+        function getLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(showPosition, showError);
+            } else {
+                x.innerHTML = "Geolocation is not supported by this browser.";
+            }
+        }
+
+        /* Function to set activityKeyWord according to the activity chosen by the user and reset flag variables 'true' */
+		function setActivityKeyWord(){
+			
+			if(pageChosen == 'Biking / Cycling'){
+				activityKeyWord = 'biking trails near me';
+				firstPlaceDetailsSearchBikingCycling = true;
+			}
+			
+			if(pageChosen == 'Camping'){
+				activityKeyWord = 'Campsite near me no hotel';
+				firstPlaceDetailsSearchCamping = true;
+			}
+			
+			if(pageChosen == 'Canoeing / Kayaking'){
+				activityKeyWord = 'Canoe Kayak places';
+				firstPlaceDetailsSearchCanoeingKayaking = true;
+			}
+			
+			if(pageChosen == 'Fishing'){
+				activityKeyWord = 'places for fishing';
+				firstPlaceDetailsSearchFishing = true;
+			}
+			
+			if(pageChosen == 'Jogging / Running'){
+				activityKeyWord = 'Park Trail Track and Field near me';
+				firstPlaceDetailsSearchJoggingRunning = true;
+			}
+			
+			if(pageChosen == 'Hiking / Sightseeing'){
+				activityKeyWord = 'Hiking near me';
+				firstPlaceDetailsSearchHikingSightSeeing = true;
+			}
+			
+			if(pageChosen == 'Skating'){
+				activityKeyWord = 'skating places near me'; 
+				firstPlaceDetailsSearchSkating = true;
+			}
+			
+			if(pageChosen == 'Snowboarding / Skiing'){
+				activityKeyWord = 'ski places';
+				firstPlaceDetailsSearchSnowboardingSkiing = true;
+				
+			}
+			
+			if(pageChosen == 'Swimming'){
+				activityKeyWord = 'swimming places near me';
+				firstPlaceDetailsSearchSwimming = true;
+			}
+		}
+
+		/* Function to set user's current location with the parameter 'position'. Minimum zoom level is set to 12. It draws the map of type ROADMAP  centered @ the user's location and saved 
+		 * the map in a variable map. It also draws marker for the locations returned from nearbySearch on the map. It calls nearbySearch with a request with ranked by distance. Function 
+		 * nearbySearch has arguments of 'request' to store the result and callback function.
+		 */
+        function showPosition(position) {
+        
+            currentPosition = { lat: position.coords.latitude, lng: position.coords.longitude };
+         
+            // This is the minimum zoom level that we'll allow
+            var minZoomLevel = 12;
+
+            map = new google.maps.Map(document.getElementById('map_canvas'), {
+                zoom: minZoomLevel,
+                center: new google.maps.LatLng(position.coords.latitude, position.coords.longitude),
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            });
+
+            var userMarker = new google.maps.Marker({
+                position: currentPosition,
+                map
+            });
+
+            //userMarker.setIcon('http://maps.google.com/mapfiles/marker_yellow.png');
+			userMarker.setIcon('http://www.robotwoods.com/dev/misc/bluecircle.png');
+            //userMarker.setIcon('https://maps.gstatic.com/mapfiles/ms2/micons/man.png');
+
+
+            var request = {
+                location: currentPosition,
+                //radius: '5000',
+                keyword: activityKeyWord,
+                rankBy: google.maps.places.RankBy.DISTANCE
+            };
+            infowindow = new google.maps.InfoWindow();
+            service = new google.maps.places.PlacesService(map);
+            service.nearbySearch(request, callback);
+
+        }
+		
+		/* variable to set maximum default size of the search result. */
+		var defaultLength = 0;
+
+        function callback(results, status) {
+            if (status == google.maps.places.PlacesServiceStatus.OK) {
+				/* If results is less than 10, defaultLength needs to be set to results.length */
+				if(results.length > defaultLength)
+					defaultLength = 10;
+				if(results.length <= defaultLength)
+					defaultLength = results.length;
+					
+                for (var i = 0; i < defaultLength; i++) {
+                    //for (var i = 0; i < 3; i++) {
+                    var place = results[i];
+                    
+                    arenas[i] = results[i];
+
+                    var pid = results[i].place_id;
+					
+					findDistance(i);
+					//Add it here on Jan 5 @ 3:05 am so that openNow can be shown on infowindow on the map. It doesn't need to wait for place details search
+					openHours[i] = results[i].opening_hours;
+                    getOpenNow(i);
+					createMarker(results[i], i);
+                    //alert(pid);
+
+                }//for
+
+            }
+            
+			// if request was not successful, set arenas.length = 0, so previous request won't be displayed on 'activityListPage'
+			else{
+				//arenas.length = 0;
+				defaultLength = 0;
+			}
+        }
+		
+		/* Function to create markers on the map. Parameter, 'place' is returned from nearbySearch and parameter 'index' is passed to fetch distance from dist[] array and 'openOrClosed' 
+		 * string from openOrClosedArray.
+		 */
+		function createMarker(place, index) {
+            var placeLoc = place.geometry.location;
+            var marker = new google.maps.Marker({
+                map: map,
+                position: place.geometry.location
+            });
+
+            google.maps.event.addListener(marker, 'click', function () {
+                infowindow.setContent('<div><strong>' + place.name + '</strong><br>' + dist[index] + '<strong>       </strong>' +
+				'<i>' + openOrClosedArray[index] + '</i></div>');
+                infowindow.open(map, this);
+            });
+            //alert("leaving createMarker");
+        }
+		
+		
+		/* Function to fetch open_now status from opening_hours of a location returned by nearbySearch. Argument 'i' is an index to fetch 'opening_hours' object which is saved in 'openHours' 
+		 * array. If 'opening_hours' object is undefined, 'openOrClosed' variable is set to ' ' empty string. If opening_hours is available, 'openOrClosed' variable is set to 'open' or 
+		 * 'closed' depending on open_now status (true or false).
+		 */
+		function getOpenNow(i){
+				//alert(openHours[i] === undefined);
+				if(openHours[i] === undefined)
+					openOrClosed = ' ';
+				else{
+						//alert("openHours[i].open_now: " + openHours[i].open_now);
+						if(openHours[i].open_now == true){
+							openOrClosed = 'open';
+						}
+						if(openHours[i].open_now == false){
+							openOrClosed = 'closed'; 
+						}
+					}
+					openOrClosedArray[i] = openOrClosed;	
+		}
+
+		
+		/* Function to programmatically change from one page to activityPage. It invokes setActivityKeyWord function and also invokes getRealContentHeight to get the height of viewport 
+		 * between the header and footer of the page. Then, it invokes getLocation function.
+		 */
+        function goToActivity(obj) {
+
+            $.mobile.changePage("#activityPage");
+			
+			if(pageChosenAlready == true){
+				pageChosen = $(obj).text();
+				pageChosenAlready = false;
+			}
+			
+			//alert(pageChosen);
+				$(document).on('pageshow', '#activityPage', function (e, data) {
+						/* Set page load flag to true */
+						chosenPageReloaded = true;
+						setActivityKeyWord();
+						
+						$('#contentMap').height(getRealContentHeight());
+						getLocation();
+						
+						/* Set activity footer icon Hide on 7 12 30 pm */
+						changeFooterIcon();
+				});
+		}
+
+
+		/* Function to programmatically change from one page to activityListPage. It finds out the length of array arenas and if it is less than 20 locations saved in that array, it will 
+		 * remove extra buttons which are used to display each location's name, distance and rating. It also show hidden buttons if they were hidden in previous action. When activityListPage 
+		 * is fully ready, this function invokes getPlaceDetails(i) function. 
+		 */
+        function goToActivityListPage(obj) {
+			/* Change to activityListPage with a transition "slideup" */
+            $.mobile.changePage("#activityListPage", {
+				transition: "slideup"
+			});
+			
+			/* Set activity footer icon. Hide on 7 12 30 pm */
+				changeFooterIcon();
+				
+			
+			/* When user is going too fast from the map page to thelist page, distance and duration for location 10 - 20 are not likely to  be shown because execution is delayed for 1 sec for
+			 * each request from index 10 - 19. It is programmed this way because	getDistanceMatrix request gets exhausted after 10 requests instantly. So distances for 10 - 20 may not have
+      		 * been fetched if activityListPage is jumped from map page too fast. And 'undefined' word will be displayed for distance on some of the later numbered locations. To prevent this,
+			 * empty strings ' ' are stored in array of dist[] and dur[]. 
+			 */ 
+			for(var i = 0; i < dist.length; i++)    /*******************************************************************************************************/
+			{
+				//alert("inside for: dist[i] === undefined " + (dist[i] === undefined));
+				if(dist[i] === undefined)
+					dist[i] = '';
+				if(dur[i] === undefined)
+					dur[i] = '';
+				
+			}
+			
+			//alert("In goToActivityListPage arenas.length:  defaultLength" + arenas.length + " " + defaultLength);
+			
+			/* Show all tabs first */
+			var idToShow = "#place_";
+            for (var i = 0; i < defaultLength; i++) {
+                    idToShow = idToShow + i;
+                    $(idToShow).show();
+                    idToShow = idToShow.substr(0, 7);
+			}
+			
+            /* condition to hide extra ul items on the list in the case search result has less than 20 locations Or If there is Zero location returned, arenas.length === undefined */
+			if (defaultLength < 10){
+                var numberToHide = 10 - defaultLength;
+               
+                var idToHide = "#place_";
+                for (var i = defaultLength; i < 10; i++) {
+                    idToHide = idToHide + i;
+                    
+                    $(idToHide).hide();
+                    idToHide = idToHide.substr(0, 7);
+                }
+            }
+
+            /* find prefix from ids (#place-1) and loop through to attach i at the end of the string. This string is then used in $() to display name, distance and rating on each list items **/
+            var idPrefix = "#place_";
+			var idPrefixNoHashtag = "place_";
+			
+			  for (var i = 0; i < defaultLength; i++) {
+				/* Codes below are implemented so that locations can be updated in the list by calling $("#place_0").append. idPrefix = "#place_" and within 'for' loop index i is appended 
+				 * to "place_" to get "#place_0", "#place_1", "#place_3" etc. idPrefix is then set back to '#place_' using 'substr' function.
+				 */
+                idPrefix = idPrefix + i;
+                $(idPrefix).text(i + 1 + " : " + arenas[i].name);
+				//alert("(arenas[i].rating === undefined): " + (arenas[i].rating === undefined));
+				if(arenas[i].rating === undefined)
+					 $(idPrefix).append("<br>" +  "(" + dist[i]+ ")");
+				else
+					$(idPrefix).append("<br> " + "Rating:  " + arenas[i].rating + " (" + dist[i]+ ")");
+				idPrefix = idPrefix.substr(0, 7);
+				
+				/* Codes below are implemented so that 'DOM CSS' can be used to style the locations in the list. idPrefixNoHashtag = "place_" and within 'for' loop index i is appended to "place_"
+				 * to get "place_0", "place_1", "place_3" etc. Then, idPrefixNoHashtag variable is used to call function 'document.getElementById()' to format the text. idPrefixNoHashtag is then 
+				 * set back to '#place_' using 'substr' function.
+				 */
+				idPrefixNoHashtag = idPrefixNoHashtag + i;
+				/* Use DOM CSS to style the locations displayed on the list */
+				document.getElementById(idPrefixNoHashtag).style.color = "#3d1201";
+				
+				idPrefixNoHashtag = idPrefixNoHashtag.substr(0, 6);
+				        
+            }
+
+
+            /* Invoke place detail information */
+            $(document).on('pageshow', '#activityListPage', function (e, data) {
+				
+				if (pageChosen == 'Biking / Cycling'  && firstPlaceDetailsSearchBikingCycling == true && chosenPageReloaded == true) {
+					for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchBikingCycling = false;
+				}
+				
+				if (pageChosen == 'Camping' && firstPlaceDetailsSearchCamping == true && chosenPageReloaded == true) {
+					for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchCamping = false;
+				}
+				
+				if (pageChosen == 'Canoeing / Kayaking' && firstPlaceDetailsSearchCanoeingKayaking == true && chosenPageReloaded == true ) {
+                    for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchCanoeingKayaking = false;
+				}
+				
+				if (pageChosen == 'Fishing' && firstPlaceDetailsSearchFishing == true && chosenPageReloaded == true) {
+                    for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchFishing = false;
+				}
+				
+				if (pageChosen == 'Jogging / Running' && firstPlaceDetailsSearchJoggingRunning == true && chosenPageReloaded == true) {
+					for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchJoggingRunning = false;
+				}
+				
+				if (pageChosen == 'Hiking / Sightseeing' && firstPlaceDetailsSearchHikingSightSeeing == true && chosenPageReloaded == true) {
+					for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchHikingSightSeeing = false;
+				}
+
+                if (pageChosen == 'Skating' && firstPlaceDetailsSearchSkating == true && chosenPageReloaded == true) {
+					for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchSkating = false;
+				}
+				
+				if (pageChosen == 'Snowboarding / Skiing' && firstPlaceDetailsSearchSnowboardingSkiing == true && chosenPageReloaded == true) {
+					for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchSnowboardingSkiing = false;
+				}
+				
+				if (pageChosen == 'Swimming' && firstPlaceDetailsSearchSwimming == true && chosenPageReloaded == true) {
+					for(var i = 0; i < defaultLength; i++){
+						getPlaceDetails(i);
+					}  //for
+					firstPlaceDetailsSearchSwimming = false;
+				}
+				
+            });
+        }
+		
+		/* function to fetch place details of locations returned from nearbySearch reaquest. It takes a parameter 'i' and returned results (place) are saved in arenasDetails[] array in
+		 * accordance with index 'i'. To prevent OVER_QUERY_LIMIT error, (function (i) { setTimeout(function() {} is added. For 1 - 9, getDistanceMatrix is invoked instantly, from 10 - 20,
+		 * execution delays one second for each getDistanceMatrix request.
+		 */
+        function getPlaceDetails(i) {
+
+            var serviceDetails = new google.maps.places.PlacesService(map);
+
+			(function (i) {//1
+				setTimeout(function () {//2
+					serviceDetails.getDetails({
+						placeId: arenas[i].place_id //pid
+					}, function (place, status) {
+
+						if (status == google.maps.places.PlacesServiceStatus.OVER_QUERY_LIMIT) {
+							//alert("name: " + arenas[i].name);
+						}// if
+
+						//alert(status);
+						if (status == google.maps.places.PlacesServiceStatus.OK) {
+							arenasDetails[i] = place;
+							weekdayText[i] = arenasDetails[i].opening_hours.weekday_text;
+							fetchPhotos(place, i);
+						
+						}//if
+						
+
+					}); //function } + .getDetails );
+					
+				}, i < 9 ? 0 : 1000 * i); //2
+			})(i); // function (i)
+				//     } // for
+		} // main
+		
+		
+		
+		/* function to find distance between user's current location and results. Distance and duration are saved in arrays of distance and duration with a parameter 'index' sent via the 
+		 * function. To prevent OVER_QUERY_LIMIT error, (function (inde) { setTimeout(function() {} is added. For 1 - 9, getDistanceMatrix is invoked instantly, from 10 - 0, execution delays 
+		 * one second for each getDistanceMatrix request.
+		 */
+
+        function findDistance(index) {
+
+            var geocoder = new google.maps.Geocoder;
+            var origin1 = { lat: currentPosition.lat, lng: currentPosition.lng };
+            var destinationA = arenas[index].geometry.location;
+
+            var serviceDistance = new google.maps.DistanceMatrixService;
+			(function (index) {//function(index)
+				setTimeout(function () {//setTimeout
+					serviceDistance.getDistanceMatrix({ //1
+						origins: [origin1],
+						destinations: [destinationA],
+						travelMode: 'DRIVING',
+						unitSystem: google.maps.UnitSystem.METRIC,
+						avoidHighways: false,
+						avoidTolls: false
+					}, function (response, status) {  //1, 2
+						if (status !== 'OK') {  // 3
+						} else {  //3, 4
+							//alert("status: " + status);
+							var origins = response.originAddresses;
+							//alert("origins length: " + origins.length);
+
+							for (var i = 0; i < origins.length; i++) {
+								var distanceResult = response.rows[i].elements;
+								//alert("distanceResult length: " + distanceResult.length);
+								for (var j = 0; j < distanceResult.length; j++) {
+									var element = distanceResult[j];
+									var distance = element.distance.text;
+									var duration = element.duration.text;
+									dist[index] = distance;
+									dur[index] = duration;
+								}//for j
+							} //for i
+						} //4 else
+					}); // 
+				}, index < 9 ? 0 : 1000 * index); //setTimeout
+			})(index); // function (index)
+		}//main
+		
+		
+		/* Function to navigate to 'placePage' (page which display detail information of a location). When 'pagePage' is loaded, there is a for lop to fetch details informations of each 
+		 * location stored in arenasDetails[] array. Then it updates 'placePage' with appropiate information of the locations on click on the list of the location shown on 'activityListPage'.
+		 */
+        function goToPlacePage(obj) {
+            $.mobile.changePage("#placePage");
+            tabChosen = $(obj).text();
+            var placeNumber = tabChosen.substr(0, 2);
+            placeNumber -= 1;
+
+            for (var i = 0; i < defaultLength; i++) //change on jan 2 5:41 pm
+            {
+                if (placeNumber == i) {
+					getWeekDayText(i);
+					urlIndex = i;
+					
+					//fetchPhotos(i);
+					
+                    $("#placeName").text(arenasDetails[i].name);
+					$("#openClosed").text(openOrClosedArray[i]);
+					if(arenasDetails[i].rating === undefined)
+						  $("#rating").text("Rating: unavailable");
+					else
+						$("#rating").text("Rating:  " + arenasDetails[i].rating);
+					
+					if(dist[i] != '' || dur[i] != 0)
+						$("#distanceDuration").text(dist[i] + " " + dur[i] + " by driving");
+                    $("#placePhone").text(arenasDetails[i].formatted_phone_number);
+                    $("#placeAddress").text(arenasDetails[i].formatted_address);
+                    $("#openingHours").html(openingHoursString);
+				
+					$("#website").text("Official website");
+					
+					if(photosArray[i] != 'no photo' || photosArray[i] != undefined)
+						$("#imageOne").attr("src", photosArray[i]);
+	
+                }
+            }
+		
+
+        }
+			
+		/* Function to fetch photo of a location */
+		function fetchPhotos(place, index){
+		
+		
+			var photos = place.photos;
+			if(photos === undefined){
+				photosArray[index] = 'no photo';
+			}
+			else{
+				//alert("photos " + photos[0].getUrl({'maxWidth': 300, 'maxHeight': 300}));
+				var image1 = photos[0].getUrl({'maxWidth': 300, 'maxHeight': 300});
+				var image2 = photos[1].getUrl({'maxWidth': 300, 'maxHeight': 300});
+				var image3 = photos[3].getUrl({'maxWidth': 300, 'maxHeight': 300});
+				
+				photosArray[index] = image2;
+				
+				
+			}
+		
+		  
+		}
+		
+		
+		/* Function to fetch daily operating hours from array 'weekdayText' which contains 'weekday_text' (an array of 7 strings 0f daily operating hours). There is a condition to check if
+		 * 'weekday_text' is undefined.
+		 */
+		
+		function getWeekDayText(i){
+			/* Reset openingHoursString for new location */
+			openingHoursString = '';
+			
+			/* Condition to check is operating hours are not available */
+			if(weekdayText[i] === undefined)
+				emptyHours = ' ';
+			else{
+				for(var j = 0; j < 7; j++){
+					openingHoursString += weekdayText[i][j] + "<br>"
+				}
+			
+			}
+			
+		}
+		/* Functon to display webpage of each location from placePage. If website is not available, do google search using place's name */
+		function goToOpenWebPage(obj){
+			pageChosen = $(obj).text();
+			
+			if(arenasDetails[urlIndex].website === undefined){
+				var searchURL = "https://www.google.ca";
+				var fullSearchURL = searchURL + "/#q=" + arenasDetails[urlIndex].name;
+				window.open(fullSearchURL);
+			}
+			else
+				window.open(arenasDetails[urlIndex].website);
+		}
+		
+		/* Function to set activity Icon display at the footer of Map page, List page, Place page so that user can remember which activity was chosen. */
+		function changeFooterIcon(){
+			//alert("inside changeFooterIcon pageChosen:" + pageChosen);
+			if(pageChosen == 'Biking / Cycling'){
+				document.getElementById('footerActivityIconMap').src="BikeIcon.png";
+				document.getElementById('footerActivityIconList').src="BikeIcon.png";
+				document.getElementById('footerActivityIconPlace').src="BikeIcon.png";
+			}
+			
+			if(pageChosen == 'Camping'){
+				document.getElementById('footerActivityIconMap').src="CampIcon.png";
+				document.getElementById('footerActivityIconList').src="CampIcon.png";
+				document.getElementById('footerActivityIconPlace').src="CampIcon.png";
+			}
+			
+			if(pageChosen == 'Canoeing / Kayaking'){
+				document.getElementById('footerActivityIconMap').src="KayakIcon.png";
+				document.getElementById('footerActivityIconList').src="KayakIcon.png";
+				document.getElementById('footerActivityIconPlace').src="KayakIcon.png";
+			}
+			
+			if(pageChosen == 'Fishing'){
+				document.getElementById('footerActivityIconMap').src="FishIcon.png";
+				document.getElementById('footerActivityIconList').src="FishIcon.png";
+				document.getElementById('footerActivityIconPlace').src="FishIcon.png";
+			}
+			
+			if(pageChosen == 'Jogging / Running'){
+				document.getElementById('footerActivityIconMap').src="RunIcon.png";
+				document.getElementById('footerActivityIconList').src="RunIcon.png";
+					document.getElementById('footerActivityIconPlace').src="RunIcon.png";
+			}
+			
+			if(pageChosen == 'Hiking / Sightseeing'){
+				document.getElementById('footerActivityIconMap').src="HikeIcon.png";
+				document.getElementById('footerActivityIconList').src="HikeIcon.png";
+				document.getElementById('footerActivityIconPlace').src="HikeIcon.png";
+			}
+			
+			if(pageChosen == 'Skating'){
+				document.getElementById('footerActivityIconMap').src="SkateIcon.png";
+				document.getElementById('footerActivityIconList').src="SkateIcon.png";
+				document.getElementById('footerActivityIconPlace').src="SkateIcon.png";
+			}
+			
+			if(pageChosen == 'Snowboarding / Skiing'){
+				document.getElementById('footerActivityIconMap').src="SkiIcon.png";
+				document.getElementById('footerActivityIconList').src="SkiIcon.png";
+				document.getElementById('footerActivityIconPlace').src="SkiIcon.png";
+			}
+			
+			if(pageChosen == 'Swimming'){
+				document.getElementById('footerActivityIconMap').src="SwimIcon.png";
+				document.getElementById('footerActivityIconList').src="SwimIcon.png";
+				document.getElementById('footerActivityIconPlace').src="SwimIcon.png";
+			}
+		}
+		
+        function goToSnowboardingSkiing(obj) {
+            $.mobile.changePage("#snowboardingSkiingPage");
+            mapChosen = $(obj).text();
+            $("#snowboardingSkiing").text(mapChosen);
+        }
+		
+
+    </script>
+	
+	<style>
+	
+	#enterApp {
+	color: green;
+	font-size: 180%;
+	font-family: "Lucida Grande";
+	position: absolute;
+	top: 390px;
+	text-align: center;
+	width: 100%;	
+	}
+	
+	#pageHeader, #pageFooter, #navbar li a{
+		text-align: center;
+		color: #045266;		
+		background-color: #def2f7;
+		border: 1px outset #BDE8EA;	
+	}
+	#headerLogoImage {
+		padding-top: 6px;
+	}
+	
+	#mainPage .ui-content, #activityListPage .ui-content{
+		background-color: #045266;
+		background-size : 100% 100%;
+		min-height: 540px;
+	}
+	
+	#listItemsMain li a, #locationList li a{
+		background-color: #f7f7f7;
+	}
+	
+	#listItemsMain li a p {
+		position: absolute;
+		padding-top: 10px; 
+		left: 20px
+		margin-left: 5px;
+		font-size: 16px;
+		font-weight: bold;
+		color: #3d1201;
+		letter-spacing: -0.5px;		
+	}
+
+	
+	#listItemsMain li a img {
+		border: 1px outset #BDE8EA;		
+	}
+	
+
+	#footerActivityIconMap, #footerActivityIconList, #footerActivityIconPlace {
+		width: 50px;
+		height: 50px;
+		float: top;		
+	}
+	#pageFooter {
+		height: 50px;	
+	}
+	
+	.ui-btn {
+		color: blue;	
+	}
+	
+	#imageOne {
+		
+		width: 100%; 
+		height: 100%; 
+		position: relative; 
+		border: 1px solid #245135;
+	}
+	
+	#imageOne img {
+	 max-width: 300px;
+	 max-width: 300px;
+    display: block;  
+	width: 100%; 
+
+	}
+
+	
+	
+	</style>
+</head>
+
+<body>
+	<div data-role="page" id="coverPage" style="background-image: url('WorldMapBackground.png'); background-attachment: fixed; background-repeat: no-repeat; background-size: 100% 100%;"
+    alt="background World Map" data-theme="a">
+	<div data-role="main" id="ui-content">
+            <div id="enterApp" class="centered">
+				<a onclick="goToMainPage(this)">ENTER</a>
+			</div>
+        </div>
+	
+	</div>
+	
+	
+    <div data-role="page" id="mainPage">
+		<div data-role="header" id="pageHeader" data-position="fixed">
+			<img id="headerLogoImage" border="0" src="XertionLogo.png" alt="Xertion Logo" />
+		</div>
+        <div data-role="main" class="ui-content">
+            <ul data-role="listview" id="listItemsMain" data-filter="true" data-input="#myFilter" data-inset="true">
+                <li data-icon="false"><a onclick="goToActivity(this)"><img src="BikeIcon.png" alt="BikeIcon"><p>Biking / Cycling</p></a></li>
+				<li data-icon="false"><a onclick="goToActivity(this)"><img src="CampIcon.png" alt="CampIcon"><p>Camping</p></a></li>
+                <li data-icon="false"><a onclick="goToActivity(this)"><img src="KayakIcon.png" alt="Kayak"><p>Canoeing / Kayaking</p></a></li>
+                <li data-icon="false"><a onclick="goToActivity(this)"><img src="FishIcon.png" alt="Fishing"><p>Fishing</p></a></li>
+                <li data-icon="false"><a onclick="goToActivity(this)"><img src="RunIcon.png" alt="Run"><p>Jogging / Running</p></a></li>
+                <li data-icon="false"><a onclick="goToActivity(this)"><img src="HikeIcon.png" alt="Hiking"><p>Hiking / Sightseeing</p></a></li>
+                <li data-icon="false"><a onclick="goToActivity(this)"><img src="SkateIcon.png" alt="Skating"><p>Skating</p></a></li>
+                <li data-icon="false"><a onclick="goToActivity(this)"><img src="SkiIcon.png" alt="Skiing"><p>Snowboarding / Skiing</p></a></li>
+                <li data-icon="false" id="lastItem"><a onclick="goToActivity(this)"><img src="SwimIcon.png" alt="Swimming"><p>Swimming</p></a></li>
+			   <!--<li data-icon="false" id="lastItem"><a onclick="goToActivity(this)">Swimming</a></li> -->
+			 </ul>
+        </div>
+    </div>
+
+
+    <div data-role="page" id="activityPage">
+        <div data-role="header">
+            <div data-role="navbar" id="navbar" data-iconpos="top">
+                <ul>
+                    <li><a onclick="goToMainPage(this)" data-icon="home" data-iconpos="bottom" class="ui-btn-active ui-state-persist">Home</a></li>
+                    <li><a onclick="goToActivityListPage(this)" data-icon="bullets" data-iconpos="bottom" class="ui-btn-active ui-state-persist">Location List</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="contentMap">
+            <div id="map_canvas" style="height:100%"></div>
+        </div>
+
+        <div data-role="footer"  id="pageFooter" data-position="fixed">
+            <img id="footerActivityIconMap" border="0" src="XertionLogo.png" alt="Activity Icon" />
+        </div>
+    </div>
+
+    <div data-role="page" id="activityListPage">
+        <div  data-role="header" data-position="fixed">
+            <div data-role="navbar" id="navbar" data-iconpos="top">
+                <ul>
+					 <li><a onclick="goToActivity(this)" data-icon="location" data-iconpos="bottom" class="ui-btn-active ui-state-persist">Map</a></li>
+                    <li><a onclick="goToMainPage(this)" data-icon="home" data-iconpos="bottom" class="ui-btn-active ui-state-persist">Home</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div data-role="main" class="ui-content">
+			<ul data-role="listview" id="locationList" data-filter="true" data-input="#myFilter" data-inset="true">
+                <li><a id="place_0" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_1" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_2" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_3" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_4" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_5" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_6" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_7" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_8" onclick="goToPlacePage(this)"><p></p></a></li>
+                <li><a id="place_9" onclick="goToPlacePage(this)"><p></p></a></li>
+			</ul>
+        </div>
+
+         <div data-role="footer"  id="pageFooter" data-position="fixed">
+            <img id="footerActivityIconList" border="0" src="XertionLogo.png" alt="Activity Icon" />
+        </div>
+    </div>
+
+    <div data-role="page" id="placePage" data-transition="slideup">
+        <div data-role="header" data-position="fixed">
+            <div data-role="navbar" id="navbar" data-iconpos="top">
+                <ul>
+                    <li><a onclick="goToActivityListPage(this)" data-icon="back" data-iconpos="bottom" class="ui-btn-active ui-state-persist">Back</a></li>
+                    <li><a onclick="goToMainPage(this)" data-icon="home" data-iconpos="bottom" class="ui-btn-active ui-state-persist">Home</a></li>
+
+                </ul>
+            </div>
+        </div>
+
+        <div data-role="main" id="ui-content">
+            <div data-role="content">
+                <div id="placePageContent">
+                    <!--<div id="placePageContent" style='margin:20px; position:relative'> -->
+                    <h3 id="placeName"> Place's name </h3>
+					<p id="openClosed"> Open or closed </p>
+                    <p id="rating"> Rating</p>
+					<p id="distanceDuration"> Distance & duration </p>
+                    <p id="placePhone"> Phone </p>
+                    <p id="placeAddress"> Address </p>
+                    <p id="openingHours"> Opening hours </p>
+					<a id="website" onclick="goToOpenWebPage(this)"> Website </a>
+					
+					<div><br>
+						<img id="imageOne" src="DefaultPhoto.png" alt="image"/>
+					</div>
+					
+					
+					<!--<a id="website" onclick="goToWebPage(this)"> Website </a> -->
+					
+
+                </div>
+            </div>
+        </div>
+
+        <div data-role="footer"  id="pageFooter" data-position="fixed">
+            <img id="footerActivityIconPlace" border="0" src="XertionLogo.png" alt="Activity Icon" />
+        </div>
+    </div>
+
+    <div data-role="page" id="webPage">
+        <div data-theme="a" data-role="header">
+            <div data-role="navbar">
+                <ul>
+                    <li><a onclick="goToPlacePage(this)">Back</a></li>
+					<li><a onclick="goToMainPage(this)">Home</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <div data-role="content" id="contentWebPage">
+            <div id="webPagePane" style="height:100%"></div>
+        </div>
+		
+		<div data-theme="a" data-role="footer" data-position="fixed">
+            <h3>
+                Place page footer
+            </h3>
+        </div>
+		
+    </div>
+	
+	
+
+<script type="text/javascript" src="cordova.js"></script>
+    <script type="text/javascript" src="js/index.js"></script>
+    <script type="text/javascript">
+        app.initialize();
+</script>
+
+</body>
+</html>
